@@ -1,0 +1,138 @@
+
+async function makeCaptionRequest(mp4,videoName,language ) {
+
+
+
+   const config = {
+	 method: 'POST',
+	   url: 'https://www.happyscribe.com/api/v1/transcriptions',
+	   headers: { 
+		   	authorization: 'Bearer ' + happyscribeKey,
+    	   	'content-type': 'application/json'
+		},
+		data: JSON.stringify({
+		   transcription: {
+		        name: videoName,
+		        language: language,
+		        tmp_url: mp4
+		      }
+	  })
+    }
+	console.log("config" ,config);
+	try {
+		let apiResponse = await axios(config);
+		let trascriptionId = apiResponse.id;
+	   console.log(" trascriptionId", trascriptionId);
+		//now we have requested a transcription, so we need to check to see if the transcription is ready
+	   //so we will oping the checkTranscription endpoint  
+	   checkTranscription(transcriptionId);
+		  
+	  } catch (error) {
+		  console.log(error)
+	  }
+
+  }
+
+async  function checkTranscription(transcriptionId){
+      const config2 = {
+   	 method: 'POST',
+   	   url: 'https://www.happyscribe.com/api/v1/transcriptions'+ transcriptionId,
+   	   headers: { 
+   		   	authorization: 'Bearer ' + happyscribeKey,
+       	   	'content-type': 'application/json'
+   		}
+       }
+   	console.log("config" ,config2);
+   	try {
+   		let transcriptStatus = await axios(config2);
+   		let transcriptionStatus = transcriptStatus.state;
+   	   console.log("transcriptionStatus", transcriptionStatus);
+	   if (transcriptionStatus == "automatic_done"){
+	   		//transcription comploeted
+		   //now we need to request the API create a VTT file
+		   requestVTT(transcriptionId);
+	   }
+	   else{
+	   	   //still underwaqy - so let's do it again!
+		   setTimeout(checkTranscription,2000,transcriptionId);
+		
+	   }		  
+   	  } catch (error) {
+   		  console.log(error)
+   	  }
+  }  
+ 
+ async function requestVTT(transcriptionId){
+  	  // we have a valid transcription, 
+	  // the trasncription has completed
+	  // now we ask for the VTT file
+      const config3 = {
+   	   method: 'POST',
+   	   url: 'https://www.happyscribe.com/api/v1/exports',
+   	   headers: { 
+   		   	authorization: 'Bearer ' + happyscribeKey,
+       	   	'content-type': 'application/json'
+   		},
+		data: JSON.stringify({
+		   transcription: {
+			   format: 'VTT',
+			   transcriptionIds: [transcriptionId]
+		      }
+	    })
+       }
+   	console.log("config" ,config3);
+   	try {
+   		let exportResponse = await axios(config3);
+   		let exportStatus = exportResponse.state;
+   	   console.log("exportStatus", exportStatus);
+	   if (exportStatus == "ready"){
+	   		//export is ready.. now we can download the file
+		   // and upload it to api.video
+		   let exportUrl = exportResponse.download_link;
+		   
+		   let filename = transcriptionId + ".VTT";
+		   const file = fs.createWriteStream(filename);
+		   const request = http.get(exportUrl, function(response) {
+		     response.pipe(file);
+		   });
+		   
+		   //now send this file to API.video
+		   let uploadingCaption = client.captions.upload(path.join(__dirname +file) , {videoId: videoId, language: language});
+
+
+//a lot of ctach work to be done here.
+
+		    uploadingCaption.then(function(caption) {
+		      console.log(caption);
+			  //set this caption as default
+			  let setDefault = client.captions.updateDefault(videoId, language, true);
+
+			   setDefault.then(function(captiondefault) {
+			     console.log(captiondefault);
+				 //finally. retag the video as having captions
+				 captionsTag = "captioned";
+				 let updatecaptionTag = client.videos.update(videoId, {tags: [captionsTag]});
+
+				  updatecaptionTag.then(function(video) {
+				    console.log(video.description);
+				  });
+			  });
+		   });
+		   
+		   //todo
+		   
+	   }
+	   else{
+	   	   //still underwaqy - so let's do it again!
+		   setTimeout(requestVTT,2000,transcriptionId);
+		
+	   }		  
+   	  } catch (error) {
+   		  console.log(error)
+   	  }
+	
+	
+	
+	
+	
+  }
