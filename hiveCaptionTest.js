@@ -1,4 +1,4 @@
-let hiveCaptionKey = "9yAH1AOyfrTAC2U2DYwXQyVzttCJ50Nl";
+let hiveCaptionKey = "";
 
 let mp4 = "https://cdn.api.video/vod/vi3C1bpk5ONBdQ2zesUOnzBJ/mp4/1080/source.mp4";
 
